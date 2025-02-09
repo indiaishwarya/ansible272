@@ -1,0 +1,53 @@
+---
+- hosts: all
+  become: yes
+  vars:
+    # Force Ansible to use 'dnf' for CentOS/RHEL/Fedora or 'apt' for Ubuntu/Debian
+    # Set the correct package manager depending on your OS
+    pkg_mgr: apt  # Set 'dnf' for RHEL/CentOS/Fedora, or 'apt' for Ubuntu/Debian
+  
+  tasks:
+    # Install Apache web server based on the system's package manager
+    - name: Install Apache web server
+      package:
+        name: "{{ 'httpd' if pkg_mgr == 'dnf' else 'apache2' }}"
+        state: present
+      when: pkg_mgr == 'dnf' or pkg_mgr == 'apt'
+
+    # Ensure Apache service is started and enabled to run on boot
+    - name: Start and enable Apache service
+      service:
+        name: "{{ 'httpd' if pkg_mgr == 'dnf' else 'apache2' }}"
+        state: started
+        enabled: yes
+
+    # Open port 8080 on the firewall for RHEL/CentOS/Fedora using firewalld
+    - name: Open port 8080 on the firewall (RHEL/CentOS/Fedora)
+      firewalld:
+        port: 8080/tcp
+        state: enabled
+        permanent: yes
+      when: pkg_mgr == 'dnf'
+
+    # Open port 8080 on the firewall for Ubuntu/Debian using UFW
+    - name: Open port 8080 on the firewall (Ubuntu/Debian)
+      ufw:
+        rule: allow
+        proto: tcp
+        state: enabled
+      when: pkg_mgr == 'apt'
+
+    # Deploy the custom hello_world HTML page using a template
+    - name: Deploy hello_world.html on VM1 and VM2
+      template:
+        src: templates/hello_world.html.j2
+        dest: /var/www/html/hello_world.html
+      notify:
+        - Restart Apache
+
+  handlers:
+    # Restart Apache if the HTML page is deployed or changed
+    - name: Restart Apache
+      service:
+        name: "{{ 'httpd' if pkg_mgr == 'dnf' else 'apache2' }}"
+        state: restarted
